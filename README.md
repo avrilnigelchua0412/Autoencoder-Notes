@@ -30,11 +30,12 @@ Binary Cross-Entropy (BCE): Suitable for binary or normalized input data.
 These measure how closely the reconstruction 𝑥2 matches the original input 𝑥1.
 
 ### 🧠 Best Practices
-| Component      | Recommended Setup                                                    |
-| -------------- | -------------------------------------------------------------------- |
-| **Encoder**    | Conv layers with **LeakyReLU**, **Batch Normalization**, **no bias** |
-| **Decoder**    | Conv layers with **ReLU**, **Batch Normalization**, **no bias**      |
-| **Bottleneck** | Use **Flatten** to retain spatial details                            |
+| Component          | Recommended Setup                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------- |
+| **Encoder**        | Convolutional layers with **LeakyReLU**, **Batch Normalization**, and **no bias**               |
+| **Decoder**        | Convolutional layers with **ReLU**, **Batch Normalization**, and **no bias**                    |
+| **Bottleneck**     | Use **Flatten** to reduce dimensions while retaining spatial relationships                      |
+| **Decoder Output** | Use **Sigmoid** if image inputs are normalized to **\[0, 1]**, with **BinaryCrossentropy** loss |
 
 ### 🧩 Goal of This Work
 To:
