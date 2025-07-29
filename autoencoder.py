@@ -1,32 +1,68 @@
 from keras.models import Model
 from keras.layers import Input, Conv2D, BatchNormalization, LeakyReLU, Flatten, Dense, Reshape, Conv2DTranspose, ReLU, Activation
+from tensorflow.keras.optimizers import Adam
+from tensorflow.python.keras.losses import MeanSquaredError
 from tensorflow.python.keras import backend as K
 import numpy as np
 class Autoencoder:
     def __init__(self, input_shape, latent_space_dim, decoder_out_filter, **kwargs):
         self.input_shape = input_shape
-        
         self.kwargs = kwargs # filters, kernel, stride, etc.
-        
         self.latent_space_dim = latent_space_dim
         self.decoder_out_filter = decoder_out_filter
+        self._default()
+        self.build_model()
         
+    def _default(self):
         self.encoder = None
         self.decoder = None
         self.model = None
-        
+        self._model_input = None
+        self.conv_config = None
+        self.num_conv_layers = None
+        # This will hold the shape of the feature maps before the bottleneck layer.
         self._shape_before_bottleneck = None
-    
-        self.build_model()
-    
+        
     def summary(self):
         self.encoder.summary()
         self.decoder.summary()
+        self.model.summary()
+    
+    def compile(self, learning_rate=0.0001):
+        """Compiles the autoencoder model with the specified optimizer and loss function."""
+        optimizer = Adam(learning_rate=learning_rate)
+        loss = MeanSquaredError()  # Default loss function for autoencoders.
+        if self.model is None:
+            raise ValueError("Model has not been built yet. Call build_model() first.")
+        self.model.compile(optimizer=optimizer, loss=loss)
+        
+    def train(self, **kwargs):
+        train_config = kwargs.get('train_config', {})
+        x_train = train_config['x_train']
+        y_train = train_config['y_train']
+        batch_size = train_config['batch_size']
+        epochs = train_config['epochs']
+        validation_data = train_config.get('validation_data', None)
+        shuffle = train_config.get('shuffle', True)
+        self.model.fit(
+            x=x_train,
+            y=y_train,
+            batch_size=batch_size,
+            epochs=epochs,
+            validation_data=validation_data,
+            shuffle=shuffle,
+            verbose=1  # Set to 1 for progress bar
+        )
     
     def build_model(self):
         self._build_encoder()
         self._build_decoder()
-        # self._build_autoencoder()
+        self._build_autoencoder()
+        
+    def _build_autoencoder(self):
+        model_input = self._model_input
+        model_output = self.decoder(self.encoder(model_input))
+        self.model = Model(inputs=model_input, outputs=model_output, name='autoencoder')
     
     def _build_decoder(self):
         decoder_input = self._add_decoder_input_layer()
@@ -94,6 +130,7 @@ class Autoencoder:
     
     def _build_encoder(self):
         encoder_input = self._add_encoder_input_layer()
+        self._model_input = encoder_input
         conv_layers = self._add_encoder_conv_layers(encoder_input)
         bottleneck = self._add_bottleneck_layer(conv_layers)
         self.encoder = Model(inputs=encoder_input, outputs=bottleneck, name='encoder')
@@ -135,14 +172,14 @@ class Autoencoder:
         x = Dense(self.latent_space_dim, name='encoder_bottleneck_layer')(x) # Dense layer to create the bottleneck, reducing the dimensionality to the latent space.
         return x
     
-if __name__ == "__main__":
-    input_shape = (64, 64, 3)  # Example input shape
-    latent_space_dim = 128  # Example latent space dimension
-    decoder_out_filter = 3  # Example output filter for the decoder (e.g., 3 for RGB images)
-    autoencoder = Autoencoder(input_shape, latent_space_dim, decoder_out_filter, conv_layers_config=[
-        {'filters': 32, 'kernel_size': (3, 3), 'strides': (2, 2)},
-        {'filters': 64, 'kernel_size': (3, 3), 'strides': (2, 2)},
-        {'filters': 128, 'kernel_size': (3, 3), 'strides': (2, 2)}
-    ])
-    autoencoder.summary()
-    print("Encoder model built successfully.")
+# if __name__ == "__main__":
+#     input_shape = (64, 64, 3)  # Example input shape
+#     latent_space_dim = 128  # Example latent space dimension
+#     decoder_out_filter = 3  # Example output filter for the decoder (e.g., 3 for RGB images)
+#     autoencoder = Autoencoder(input_shape, latent_space_dim, decoder_out_filter, conv_layers_config=[
+#         {'filters': 32, 'kernel_size': (3, 3), 'strides': (2, 2)},
+#         {'filters': 64, 'kernel_size': (3, 3), 'strides': (2, 2)},
+#         {'filters': 128, 'kernel_size': (3, 3), 'strides': (2, 2)}
+#     ])
+#     autoencoder.summary()
+#     print("Encoder model built successfully.")
