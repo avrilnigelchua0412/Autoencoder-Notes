@@ -4,6 +4,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.python.keras.losses import MeanSquaredError
 from tensorflow.python.keras import backend as K
 import numpy as np
+import keras
 class Autoencoder:
     def __init__(self, input_shape, latent_space_dim, decoder_out_filter, **kwargs):
         self.input_shape = input_shape
@@ -30,11 +31,14 @@ class Autoencoder:
     
     def compile(self, learning_rate=0.0001):
         """Compiles the autoencoder model with the specified optimizer and loss function."""
-        optimizer = Adam(learning_rate=learning_rate)
-        loss = MeanSquaredError()  # Default loss function for autoencoders.
         if self.model is None:
             raise ValueError("Model has not been built yet. Call build_model() first.")
-        self.model.compile(optimizer=optimizer, loss=loss)
+        
+        self.model.compile(
+            optimizer=Adam(learning_rate=learning_rate),
+            loss=MeanSquaredError(),
+            metrics=['mae', 'mse']  # both Keras shorthand
+        )
         
     def train(self, **kwargs):
         train_config = kwargs.get('train_config', {})
@@ -53,24 +57,34 @@ class Autoencoder:
             shuffle=shuffle,
             verbose=1  # Set to 1 for progress bar
         )
+        
+    def model_save(self, filepath):
+        """Saves the model to the specified filepath."""
+        if self.model is None:
+            raise ValueError("Model has not been built yet. Call build_model() first.")
+        self.model.save("full_" + filepath)
+        self.encoder.save("encoder_" + filepath)
+        self.decoder.save("decoder_" + filepath)
     
     def build_model(self):
-        self._build_encoder()
-        self._build_decoder()
+        # self._build_encoder()
+        # self._build_decoder()
         self._build_autoencoder()
         
     def _build_autoencoder(self):
-        model_input = self._model_input
-        model_output = self.decoder(self.encoder(model_input))
-        self.model = Model(inputs=model_input, outputs=model_output, name='autoencoder')
+        encoder_output = self._build_encoder()
+        decoder_output = self._build_decoder(encoder_output)
+        self.model = Model(inputs=self._model_input, outputs=decoder_output, name='autoencoder')
     
-    def _build_decoder(self):
-        decoder_input = self._add_decoder_input_layer()
-        dense_layer = self._add_dense_layer(decoder_input)
+    def _build_decoder(self, encoder_output):
+        # decoder_input = self._add_decoder_input_layer()
+        decoder_input = encoder_output  # Use the encoder output as the decoder input.
+        dense_layer = self._add_dense_layer(encoder_output)
         reshaped_layer = self._add_reshape_layer(dense_layer)
         conv_transpose_layers = self._add_conv_transpose_layers(reshaped_layer)
         decorder_output = self._add_decoder_output(conv_transpose_layers)
         self.decoder = Model(inputs=decoder_input, outputs=decorder_output, name='decoder')
+        return decorder_output
         
     def _add_decoder_input_layer(self):
         return Input(shape=(self.latent_space_dim,), name='decoder_input')
@@ -134,6 +148,7 @@ class Autoencoder:
         conv_layers = self._add_encoder_conv_layers(encoder_input)
         bottleneck = self._add_bottleneck_layer(conv_layers)
         self.encoder = Model(inputs=encoder_input, outputs=bottleneck, name='encoder')
+        return bottleneck
         
     def _add_encoder_input_layer(self):
         return Input(shape=self.input_shape, name='encoder_input')
