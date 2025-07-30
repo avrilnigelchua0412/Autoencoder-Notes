@@ -18,7 +18,7 @@ Autoencoders aim to learn useful internal representations of the data — featur
 
 ### ⚠️ Note: Data should have dependencies across dimensions for effective encoding.
 
-If the AE uses only linear activations, it becomes mathematically equivalent to Principal Component Analysis (PCA).
+### ⚠️ Note: If the AE uses only linear activations, it becomes mathematically equivalent to Principal Component Analysis (PCA).
 
 ### 🧪 Loss Functions
 Common choices:
