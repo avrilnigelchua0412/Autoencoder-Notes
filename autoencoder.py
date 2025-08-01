@@ -1,11 +1,15 @@
+import tensorflow as tf
 from keras.models import Model
-from keras.layers import Input, Conv2D, BatchNormalization, LeakyReLU, Flatten, Dense, Reshape, Conv2DTranspose, ReLU, Activation
+from keras.layers import Input, Conv2D, BatchNormalization, LeakyReLU, Flatten, Dense, Reshape, Conv2DTranspose, ReLU, Activation, Lambda, Layer
 from tensorflow.keras.optimizers import Adam
-from tensorflow.python.keras.losses import MeanSquaredError
-from tensorflow.python.keras import backend as K
+from tensorflow.keras.losses import MeanSquaredError
+from tensorflow.keras import backend as K
 import numpy as np
 import keras
-class Autoencoder:
+from abc import ABC, abstractmethod
+import numpy as np
+
+class Autoencoder(ABC):
     def __init__(self, input_shape, latent_space_dim, decoder_out_filter, **kwargs):
         self.input_shape = input_shape
         self.kwargs = kwargs # filters, kernel, stride, etc.
@@ -181,20 +185,66 @@ class Autoencoder:
         x = LeakyReLU(negative_slope=0.01, name=f'encoder_leaky_relu_layer_{layer_index + 1}')(x) # Applies the non-linearity after normalization. This improves gradient flow and prevents dying neurons.
         return x
     
+    @abstractmethod
+    def _add_bottleneck_layer(self, x):
+        pass  # This method should be implemented in subclasses to define the bottleneck layer of the encoder.
+
+class VanillaAutoencoder(Autoencoder):
+    def __init__(self, input_shape, latent_space_dim, decoder_out_filter, **kwargs):
+        super().__init__(input_shape, latent_space_dim, decoder_out_filter, **kwargs)
+        self._default()
+        self.build_model()
+    
     def _add_bottleneck_layer(self, x):
         self._shape_before_bottleneck = K.int_shape(x)[1:] # Saves the shape of the feature maps before the bottleneck layer.
         x = Flatten(name='encoder_flatten_layer')(x) # Flattens the feature maps into a vector.
         x = Dense(self.latent_space_dim, name='encoder_bottleneck_layer')(x) # Dense layer to create the bottleneck, reducing the dimensionality to the latent space.
         return x
+
+class VariationalAutoencoder(Autoencoder):
+    def __init__(self, input_shape, latent_space_dim, decoder_out_filter, **kwargs):
+        super().__init__(input_shape, latent_space_dim, decoder_out_filter, **kwargs)
+        self._default()
+        self.build_model()
     
-# if __name__ == "__main__":
-#     input_shape = (64, 64, 3)  # Example input shape
-#     latent_space_dim = 128  # Example latent space dimension
-#     decoder_out_filter = 3  # Example output filter for the decoder (e.g., 3 for RGB images)
-#     autoencoder = Autoencoder(input_shape, latent_space_dim, decoder_out_filter, conv_layers_config=[
-#         {'filters': 32, 'kernel_size': (3, 3), 'strides': (2, 2)},
-#         {'filters': 64, 'kernel_size': (3, 3), 'strides': (2, 2)},
-#         {'filters': 128, 'kernel_size': (3, 3), 'strides': (2, 2)}
-#     ])
-#     autoencoder.summary()
-#     print("Encoder model built successfully.")
+    def _add_bottleneck_layer(self, x):
+        self._shape_before_bottleneck = K.int_shape(x)[1:]  # Saves the shape of the feature maps before the bottleneck layer.
+        x = Flatten(name='encoder_flatten_layer')(x)  # Flattens the feature maps into a vector.
+        
+        # Not Sequential, so we need to define the mu and log_variance layers separately.
+        # These layers will output the parameters of the latent space distribution.
+        self.mu = Dense(self.latent_space_dim, name='mu')(x) # Mean vector for the latent space.
+        self.log_variance = Dense(self.latent_space_dim, name='log_variance')(x)  # Log variance vector for the latent space.
+        
+        # def sample_point_from_normal_distribution(args):
+        #     mu, log_variance = args
+        #     epsilon = K.random_normal(shape=K.shape(mu), mean=0., stddev=1.) # Explicitly sample from a standard normal distribution.
+        #     sampled_point =  mu + K.exp(log_variance / 2) * epsilon  # Reparameterization trick: mu + sigma * epsilon, where sigma = exp(log_variance / 2).
+        #     # This allows gradients to flow through the sampling process. 
+        #     return sampled_point
+        
+        # x = Lambda(sample_point_from_normal_distribution, name='encoder_output')([self.mu, self.log_variance])  # Sampling layer to sample from the latent space distribution.
+        
+        x = Sampling(name='encoder_output')([self.mu, self.log_variance])  # Sampling layer to sample from the latent space distribution.
+        return x
+
+class Sampling(Layer):
+    @tf.function
+    def call(self, inputs):
+        mu, log_variance = inputs
+        epsilon = tf.random.normal(shape=tf.shape(mu), mean=0., stddev=1.) # Explicitly sample from a standard normal distribution.
+        sampled_point =  mu + tf.exp(log_variance / 2) * epsilon  # Reparameterization trick: mu + sigma * epsilon, where sigma = exp(log_variance / 2).
+        # This allows gradients to flow through the sampling process. 
+        return sampled_point
+    
+if __name__ == "__main__":
+    input_shape = (64, 64, 3)  # Example input shape
+    latent_space_dim = 128  # Example latent space dimension
+    decoder_out_filter = 3  # Example output filter for the decoder (e.g., 3 for RGB images)
+    autoencoder = VanillaAutoencoder(input_shape, latent_space_dim, decoder_out_filter, conv_layers_config=[
+        {'filters': 32, 'kernel_size': (3, 3), 'strides': (2, 2)},
+        {'filters': 64, 'kernel_size': (3, 3), 'strides': (2, 2)},
+        {'filters': 128, 'kernel_size': (3, 3), 'strides': (2, 2)}
+    ])
+    autoencoder.summary()
+    print("Encoder model built successfully.")
