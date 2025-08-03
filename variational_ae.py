@@ -1,7 +1,17 @@
+from autoencoder import Autoencoder
+import tensorflow as tf
+from keras.models import Model
+from keras.layers import Dense, Layer
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.losses import MeanSquaredError, Loss
 
-class VariationalAutoencoder(Autoencoder):
+class VariationalAutoencoder(Autoencoder, Model):
     def __init__(self, input_shape, latent_space_dim, decoder_out_filter, **kwargs):
-        super().__init__(input_shape, latent_space_dim, decoder_out_filter, **kwargs)
+        Model.__init__(self)  # Initialize the Model class
+        Autoencoder.__init__(self, latent_space_dim, decoder_out_filter, **kwargs) # Initialize the Autoencoder class
+        self.mu = None  # Placeholder for the mean vector of the latent space.
+        self.log_variance = None  # Placeholder for the log variance vector of the latent space
+        self._model = self._build(input_shape)
     
     def _add_bottleneck_layer(self, x):
         x = super()._add_bottleneck_layer(x)  # Call the parent method to flatten the feature maps.
@@ -23,29 +33,58 @@ class VariationalAutoencoder(Autoencoder):
         x = Sampling(name='encoder_output')([self.mu, self.log_variance])  # Sampling layer to sample from the latent space distribution.
         return x
     
-    def _build_autoencoder(self):
-        decoder_output = super()._build_autoencoder()  # Call the parent method to build the decoder.
-        self.model = Model(inputs=self._model_input, outputs=[decoder_output, self.mu, self.log_variance], name='variational_autoencoder')
+    def call(self, inputs):
+        recon = self._model(inputs)  # Forward pass through the model.
+        print(f"Reconstructed output shape: {recon.shape}")  # Debugging statement to check the shape of the reconstructed output.
+        print(f"Mu shape: {self.mu.shape}, Log Variance shape: {self.log_variance.shape}")  # Debugging statement to check the shapes of mu and log_variance.
+        return (recon, self.mu, self.log_variance)  # Return the tuple of reconstructed output, mean, and log variance.
+
+    def train_step(self, data):
+        # x and y are the same.
+        x, y = data # Unpack the input data.
+        
+        with tf.GradientTape() as tape:
+            output = self(x, training=True)  # Forward pass through the model. Outputs a tuple of (reconstructed output, mu, log_variance).
+            loss = tf.reduce_mean(self.loss_fn(y, output))  # Compute the loss.
+            
+        # Compute gradients.
+        trainable_variables = self.trainable_variables  # Get the trainable variables of the model.
+        gradients = tape.gradient(loss, trainable_variables)  # Compute gradients of the loss with respect to the trainable variables.
+        
+        # Apply gradients to the optimizer. Actually update the model weights.
+        self.optimizer.apply_gradients(zip(gradients, trainable_variables))  # Apply the computed gradients to the model's trainable variables.
+        
+        # Get the output[0], (H, W, C) shape.
+        self.compiled_metrics.update_state(y, output[0])  # Update the metrics with the true and predicted values.
+        
+        return {
+            'loss': loss,
+            'reconstruction_loss': self.loss_fn.reconstruction_loss(y, reconstructed_pred),
+            'kl_divergence_loss': self.loss_fn.kl_loss(reconstructed_pred),
+            **{m.name: m.result() for m in self.metrics}  # Return the loss and metrics.
+        }
     
     def compile(self, learning_rate=0.0001):
-        super().compile(learning_rate)  # Call the parent compile method.
-        loss_fn = VAELoss(recon_weight=1000.0, kl_weight=1.0)  # Custom VAE loss function.
+        self.loss_fn = VAELoss(recon_weight=1000.0, kl_weight=1.0)  # Custom VAE loss function.
         # The loss function will compute the reconstruction loss and KL divergence.
-        self.model.compile(
+        super().compile(
             optimizer=Adam(learning_rate=learning_rate),
-            loss=loss_fn,  # Custom VAE loss function.
+            loss=self.loss_fn,  # Custom VAE loss function.
             metrics=[
                 tf.keras.metrics.MeanMetricWrapper(
-                    fn=lambda y_true, y_pred: loss_fn.reconstruction_loss(y_true, y_pred),
+                    fn=lambda y_true, y_pred: self.loss_fn.reconstruction_loss(y_true, y_pred),
                     name="reconstruction_loss"
                 ),
                 tf.keras.metrics.MeanMetricWrapper(
-                    fn=lambda y_true, y_pred: loss_fn.kl_loss(y_pred),
+                    fn=lambda y_true, y_pred: self.loss_fn.kl_loss(y_pred),
                     name="kl_divergence_loss"
                 )
             ]  # Custom metrics for monitoring.
         )
-
+    
+    def summary(self, *args, **kwargs):
+            return self._model.summary(*args, **kwargs)
+        
 class Sampling(Layer):
     @tf.function
     def call(self, inputs):
@@ -99,3 +138,15 @@ class VAELoss(Loss):
         _, mu, log_variance = y_pred
         per_sample_loss = self._calculate_Kullback_Leibler_divergence(log_variance, mu)  # shape: (batch_size,)
         return tf.reduce_mean(per_sample_loss)
+    
+if __name__ == "__main__":
+    input_shape = (64, 64, 3)  # Example input shape
+    latent_space_dim = 128  # Example latent space dimension
+    decoder_out_filter = 3  # Example output filter for the decoder (e.g., 3 for RGB images)
+    autoencoder = VariationalAutoencoder(input_shape, latent_space_dim, decoder_out_filter, conv_layers_config=[
+        {'filters': 32, 'kernel_size': (3, 3), 'strides': (2, 2)},
+        {'filters': 64, 'kernel_size': (3, 3), 'strides': (2, 2)},
+        {'filters': 128, 'kernel_size': (3, 3), 'strides': (2, 2)}
+    ])
+    autoencoder.compile(learning_rate=0.001)
+    print("Autoencoder compiled successfully.")
