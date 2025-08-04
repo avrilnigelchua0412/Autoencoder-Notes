@@ -27,11 +27,10 @@ class Autoencoder(ABC):
         # This will hold the shape of the feature maps before the bottleneck layer.
         self._shape_before_bottleneck = None
     
+    @abstractmethod
     def _build(self, inputs_shape):
         encoder_output = self._build_encoder(inputs_shape)
-        decoder_output = self._build_decoder(encoder_output)
-        self.model = Model(inputs=self._model_input, outputs=decoder_output, name='autoencoder')
-        return self.model
+        return self._build_decoder(encoder_output)
     
     def _build_decoder(self, encoder_output):
         decoder_input = encoder_output  # Use the encoder output as the decoder input.

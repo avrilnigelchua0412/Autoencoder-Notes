@@ -48,3 +48,13 @@ Potentially investigate other Autoencoder variants for extended analysis.
 
 ### 📌 Notes To Be Revised
 This document is an initial draft and will be refined over time as more insights are gained through implementation and research.
+
+
+
+### 🔍 Important
+| Condition                               | Use `model.compile(loss=...)`? | Use `compiled_metrics.update_state()`?            |
+| --------------------------------------- | ------------------------------ | ------------------------------------------------- |
+| Default model, no custom training loop  | ✅ Yes                          | ✅ Yes                                             |
+| Overridden `train_step` (your case)     | ❌ No                           | ❌ Optional, only if you need default metric logic |
+| Using custom `VAELoss` class            | ✅ Yes                          | ✅ Yes                                             |
+| Using manual loss logic in `train_step` | ❌ No                           | ❌ Optional / custom                               |

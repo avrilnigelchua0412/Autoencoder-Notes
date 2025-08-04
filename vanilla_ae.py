@@ -10,7 +10,11 @@ class VanillaAutoencoder(Autoencoder, Model):
         Model.__init__(self)  # Initialize the Model class
         Autoencoder.__init__(self, latent_space_dim, decoder_out_filter, **kwargs) # Initialize the Autoencoder class
         self._model = self._build(input_shape)
-        
+    
+    def _build(self, inputs_shape):
+        decoder_output = super()._build(inputs_shape)
+        return Model(inputs=self._model_input, outputs=decoder_output, name='autoencoder')
+    
     def _add_bottleneck_layer(self, x):
         x = super()._add_bottleneck_layer(x)  # Call the parent method to flatten the feature maps.
         x = Dense(self.latent_space_dim, name='encoder_bottleneck_layer')(x) # Dense layer to create the bottleneck, reducing the dimensionality to the latent space.
