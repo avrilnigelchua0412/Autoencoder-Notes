@@ -1,0 +1,5 @@
+Audio MNIST/data/*
+*.npy
+*.wav
+*.zip
+__pycache__
