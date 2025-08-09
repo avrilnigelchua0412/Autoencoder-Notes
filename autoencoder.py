@@ -89,6 +89,9 @@ class Autoencoder(ABC):
         filters = self.decoder_out_filter # 1 grayscale output image, or 3 RGB output image.
         kernel_size = layer_params['kernel_size']
         strides = layer_params['strides']
+        # print("Layers: ", layer_params)
+        # print("Kernel: ", kernel_size)
+        # print("Strides: ", strides)
         x = Conv2DTranspose(filters=filters,
                    kernel_size=kernel_size,
                    strides=strides, padding='same',

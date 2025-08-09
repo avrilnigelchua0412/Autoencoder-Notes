@@ -239,13 +239,17 @@ class Sampling(Layer):
 #         return tf.reduce_mean(per_sample_loss)
     
 if __name__ == "__main__":
-    input_shape = (64, 64, 3)  # Example input shape
-    latent_space_dim = 128  # Example latent space dimension
-    decoder_out_filter = 3  # Example output filter for the decoder (e.g., 3 for RGB images)
-    autoencoder = VariationalAutoencoder(input_shape, latent_space_dim, decoder_out_filter, conv_layers_config=[
-        {'filters': 32, 'kernel_size': (3, 3), 'strides': (2, 2)},
+    input_shape = (257, 69, 1)  # Example input shape
+    latent_space_dim = 2  # Example latent space dimension
+    decoder_out_filter = 1  # Example output filter for the decoder (e.g., 3 for RGB images)
+    recon_weight = 1000.0  # Weight for the reconstruction loss.
+    beta = 1.0  # Weight for the KL divergence loss.
+    autoencoder = VariationalAutoencoder(input_shape, latent_space_dim, decoder_out_filter, recon_weight, beta, conv_layers_config=[
+        {'filters': 32, 'kernel_size': (3, 3), 'strides': (1, 1)},
         {'filters': 64, 'kernel_size': (3, 3), 'strides': (2, 2)},
-        {'filters': 128, 'kernel_size': (3, 3), 'strides': (2, 2)}
+        {'filters': 64, 'kernel_size': (3, 3), 'strides': (2, 2)},
+        {'filters': 64, 'kernel_size': (3, 3), 'strides': (1, 1)}
     ])
     autoencoder.compile(learning_rate=0.001)
     print("Autoencoder compiled successfully.")
+    autoencoder.summary()

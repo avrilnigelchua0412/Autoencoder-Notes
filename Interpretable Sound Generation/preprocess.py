@@ -39,6 +39,11 @@ class Padder:
         # The model sees the real signal from the start, and silence is added only after the actual content — just like in real-world recordings.
         padded_array = np.pad(array, (0, num_missing_samples), mode=self.mode)
         return padded_array
+    def pad_to_even_dims(self, spec):
+        freq, time = spec.shape
+        pad_freq = 1 if freq % 2 != 0 else 0
+        pad_time = 1 if time % 2 != 0 else 0
+        return np.pad(spec, ((0, pad_freq), (0, pad_time)), mode=self.mode)
 
 class LogSpectrogramExtractor:
     # LogSpectrogramExtractor extracts a log-scaled spectrogram from audio
@@ -53,7 +58,8 @@ class LogSpectrogramExtractor:
         # some would just remove the last (n_fft/2+1, num_frames)[:1]
         # but since where generating, completeness > convenience.
         magnitude = np.abs(stft)  # Get magnitude
-        log_spectrogram = librosa.amplitude_to_db(magnitude, ref=1.0, top_db=80.0)  # Convert to log scale (dB)
+        # log_spectrogram = librosa.amplitude_to_db(magnitude, ref=1.0, top_db=80.0)  # Convert to log scale (dB)
+        log_spectrogram = librosa.amplitude_to_db(magnitude, ref=1.0, top_db=80.0)[:-1]  # Hamm Window Exist though
         # Explicitly set the reference to 1.0 and top_db to 80.0
         # ref=1.0 means 0 dB corresponds to an amplitude of 1
         return log_spectrogram
@@ -77,7 +83,8 @@ class LogMelSpectrogramExtractor:
                                                          # Calculates power instead of magnitude. (Power = amplitude²)
                                                          )  # Power spectrogram for Mel scaling. Outputs (n_mels, num_frames)
         # Convert to log scale (dB)
-        log_mel_spectrogram = librosa.power_to_db(mel_spectrogram, ref=1.0, top_db=80.0) # Explicitly set the reference to 1.0 and top_db to 80.0
+        # log_mel_spectrogram = librosa.power_to_db(mel_spectrogram, ref=1.0, top_db=80.0) # Explicitly set the reference to 1.0 and top_db to 80.0
+        log_mel_spectrogram = librosa.power_to_db(mel_spectrogram, ref=1.0, top_db=80.0)[:-1] # Hamm Window Exist though
         # ref=1.0 means 0 dB corresponds to an amplitude of 1
         return log_mel_spectrogram
     
@@ -169,6 +176,10 @@ class PreprocessingPipeline:
             log_mel_spectrogram = self.log_mel_spectrogram_extractor.extract(signal)
             # print("Log Shape ", log_spectrogram.max())
             # print("Log Mel Shape ", log_mel_spectrogram.max())
+            
+            # log_spectrogram = self.padder.pad_to_even_dims(log_spectrogram)
+            # log_mel_spectrogram = self.padder.pad_to_even_dims(log_mel_spectrogram)
+            
             normalized_log_spectrogram = self.min_max_normalizer.normalize(log_spectrogram)
             normalized_log_mel_spectrogram = self.min_max_normalizer.normalize(log_mel_spectrogram)
             # print("Norm Log Shape ", normalized_log_spectrogram.shape)
@@ -195,11 +206,12 @@ class PreprocessingPipeline:
 if __name__ == "__main__":
     FRAME_SIZE = 512
     HOP_LENGTH = 256
-    DURATION = 0.793875 # In seconds
+    DURATION = 0.74 # In seconds
+    # Best Duration should be 80 but just to cater the dimension (60, 256, 64) and avoid complexity. I hate me.
     SAMPLE_RATE = 22050
     MONO = True
     N_MELS = 128 # 
-    OUTPUT_DIR = 'Interpretable Sound Generation/Dataset'
+    OUTPUT_DIR = '/home/chua/projects/Autoencoder Notes/Interpretable Sound Generation/Dataset'
     
     loader = Loader(SAMPLE_RATE, DURATION, MONO)
     padder = Padder()
@@ -215,7 +227,7 @@ if __name__ == "__main__":
     preprocessing_pipeline.log_mel_spectrogram_extractor = log_mel_spectrogram_extractor
     preprocessing_pipeline.min_max_normalizer = min_max_normalizer
     
-    preprocessing_pipeline.process("Interpretable Sound Generation")
+    preprocessing_pipeline.process("/home/chua/projects/Autoencoder Notes/Interpretable Sound Generation/Audio MNIST")
     
     log_spec_data, log_mel_spec_data = preprocessing_pipeline.return_dataset()
     
@@ -224,7 +236,7 @@ if __name__ == "__main__":
     
     # # Determining the "best" duration
     # durations = []
-    # for root, dirs, files in os.walk("Interpretable Sound Generation"):
+    # for root, dirs, files in os.walk("/home/chua/projects/Autoencoder Notes/Interpretable Sound Generation/Audio MNIST"):
     #     for file in files:
     #         if file.endswith(".wav"):
     #             file_path = os.path.join(root, file)
