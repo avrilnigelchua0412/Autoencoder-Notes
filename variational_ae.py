@@ -15,15 +15,20 @@ class VariationalAutoencoder(Autoencoder, Model):
         
         self.reconstruction_tracker = tf.keras.metrics.Mean(name="reconstruction_loss")
         self.kl_tracker = tf.keras.metrics.Mean(name="kl_loss")
-        self.total_loss_tracker = tf.keras.metrics.Mean(name="loss")
+        self.total_loss_tracker = tf.keras.metrics.Mean(name="total_loss")
         
         self.val_reconstruction_tracker = tf.keras.metrics.Mean(name="val_reconstruction_loss")
         self.val_kl_tracker = tf.keras.metrics.Mean(name="val_kl_loss")
-        self.val_total_loss_tracker = tf.keras.metrics.Mean(name="val_loss")
+        self.val_total_loss_tracker = tf.keras.metrics.Mean(name="val_total_loss")
         
         self.mu = None  # Placeholder for the mean vector of the latent space.
         self.log_variance = None  # Placeholder for the log variance vector of the latent space
         self._model = self._build(input_shape)
+        self._model.trainable = True
+        self._model._name = 'vae_submodel'
+        self.__setattr__('_model', self._model)  # Optional but explicit
+        self._trainable_weights = self._model.trainable_weights
+        self._non_trainable_weights = self._model.non_trainable_weights
         
     @property
     def metrics(self):
@@ -61,17 +66,15 @@ class VariationalAutoencoder(Autoencoder, Model):
         reconstruction, mu, log_variance = self._model(inputs)  # Forward pass through the model.
         # print(f"In the call method of the model with an output of: {reconstruction, mu, log_variance}")
         
-        # kl_divergence_loss = -0.5 * tf.reduce_sum(
-        #     1 + log_variance - tf.square(mu) - tf.exp(log_variance), axis=1
-        # )
-        
-        # self.add_loss(tf.reduce_mean(kl_divergence_loss))
+        # KL divergence: sum over latent dim, mean over batch
+        kl_loss = -0.5 * tf.reduce_sum(1 + log_variance - tf.square(mu) - tf.exp(log_variance), axis=1)
+        self.add_loss(self.beta * tf.reduce_mean(kl_loss))
         
         return {
-            "reconstruction" : reconstruction, 
-            "mu" : mu,
-            "log_variance" : log_variance
-            }
+            "reconstruction": reconstruction,
+            "mu": mu,
+            "log_variance": log_variance
+        }
 
     @tf.function
     def train_step(self, data):
@@ -84,15 +87,16 @@ class VariationalAutoencoder(Autoencoder, Model):
             # loss = tf.reduce_mean(self.loss_fn(y, output))  # Compute the loss.
             
             reconstruction = outputs["reconstruction"]
-            mu = outputs["mu"]
-            log_variance = outputs["log_variance"]
+            # mu = outputs["mu"]
+            # log_variance = outputs["log_variance"]
 
             # # Reconstruction loss
             recon_loss = self._calculate_reconstruction_loss(x, reconstruction)  # Calculate the reconstruction loss.
             # KL divergence
-            kl_loss = self._calculate_Kullback_Leibler_divergence(log_variance, mu)  # Calculate the KL divergence loss.
+            # kl_loss = self._calculate_Kullback_Leibler_divergence(log_variance, mu)  # Calculate the KL divergence loss.
             
-            total_loss = self.recon_weight * recon_loss + self.beta * kl_loss  # Total loss is a weighted sum of the reconstruction loss and KL divergence.
+            # Total loss includes KL from model.add_loss
+            total_loss = self.recon_weight * tf.reduce_mean(recon_loss) + tf.add_n(self.losses)
             
         # print(f"Loss computed in train_step: {loss}")
         
@@ -101,15 +105,15 @@ class VariationalAutoencoder(Autoencoder, Model):
         # log_variance = output['logvar'] # Get the log variance vector from the model's output.
         # print(f"Reconstructed prediction shape: {reconstructed_pred.shape}, mu shape: {mu.shape}, log_variance shape: {log_variance.shape}")
         
-        # Compute gradients.
-        trainable_variables = self.trainable_variables  # Get the trainable variables of the model.
-        gradients = tape.gradient(total_loss, trainable_variables)  # Compute gradients of the loss with respect to the trainable variables.
-        
-        # Apply gradients to the optimizer. Actually update the model weights.
-        self.optimizer.apply_gradients(zip(gradients, trainable_variables))  # Apply the computed gradients to the model's trainable variables.
+        # Backpropagation
+        gradients = tape.gradient(total_loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
         
         # # Get the output[0] or reconstructed_pred, (H, W, C) shape.
         # self.compiled_metrics.update_state(y, reconstructed_pred)  # Update the metrics with the true and predicted values.
+        
+        # For tracking (you still want KL separately for logging)
+        kl_loss = tf.add_n(self.losses) / self.beta
         
         # Update metrics
         self.reconstruction_tracker.update_state(recon_loss)
@@ -117,13 +121,9 @@ class VariationalAutoencoder(Autoencoder, Model):
         self.total_loss_tracker.update_state(total_loss)
         
         return {
-            # 'loss': loss,
-            # 'reconstruction_loss': self.loss_fn.reconstruction_loss(y, output),
-            # 'kl_divergence_loss': self.loss_fn.kl_loss(output),
-            # **{m.name: m.result() for m in self.metrics}  # Return the loss and metrics.
-            'loss': self.total_loss_tracker.result(),
-            'reconstruction_loss': self.reconstruction_tracker.result(),
-            'kl_loss': self.kl_tracker.result()
+            "total_loss": self.total_loss_tracker.result(),
+            "reconstruction_loss": self.reconstruction_tracker.result(),
+            "kl_loss": self.kl_tracker.result(),
         }
     
     @tf.function
@@ -143,9 +143,9 @@ class VariationalAutoencoder(Autoencoder, Model):
         self.val_total_loss_tracker.update_state(total_loss)
         
         return {
-            "loss": self.val_total_loss_tracker.result(),
-            "reconstruction_loss": self.val_reconstruction_tracker.result(),
-            "kl_loss": self.val_kl_tracker.result(),
+            "val_total_loss": self.val_total_loss_tracker.result(),
+            "val_reconstruction_loss": self.val_reconstruction_tracker.result(),
+            "val_kl_loss": self.val_kl_tracker.result(),
         }
     
     def compile(self, learning_rate=0.0001):
