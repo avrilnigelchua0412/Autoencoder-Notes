@@ -6,14 +6,23 @@ from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras import backend as K
 
 class EncoderBuilder(Model):
-    def __init__(self, conv_config=None, **kwargs):
+    def __init__(self, latent_space_dim, conv_config=None, **kwargs):
         super().__init__(**kwargs)
         self.conv_config = conv_config
+        self.latent_space_dim = latent_space_dim
         
         self.conv_layers = []
         self._flatten_layer = None
         self._shape_before_bottleneck = None
         
+        self.mu = None
+        self.log_variance = None
+        self.sampling_point_layer = None
+        
+        # self.mu_tensor = None
+        # self.log_variance_tensor = None
+        
+        self._add_vae_bottleneck_layers()
         self._set_encoder_layers()
         
     def call(self, inputs):
@@ -27,7 +36,10 @@ class EncoderBuilder(Model):
         if self._shape_before_bottleneck is None:
             self._set_shape_before_bottleneck(x)
         x = self._flatten_layer(x)
-        return x
+        mu_tensor = self.mu(x)
+        log_variance_tensor = self.log_variance(x)
+        latent_vector_z = self.sampling_point_layer([mu_tensor, log_variance_tensor])
+        return mu_tensor, log_variance_tensor, latent_vector_z
     
     def _set_encoder_layers(self):
         for i, params in enumerate(self.conv_config):
@@ -54,14 +66,39 @@ class EncoderBuilder(Model):
     def _add_encoder_flatten_layer(self):
         return Flatten(name='encoder_flatten_layer')
     
+    def _add_vae_bottleneck_layers(self):
+        self.mu = Dense(self.latent_space_dim, name='mu')
+        self.log_variance = Dense(self.latent_space_dim, name='log_variance')
+        self.sampling_point_layer = Sampling(name='encoder_output')
+    
     def _set_shape_before_bottleneck(self, x):
         self._shape_before_bottleneck = K.int_shape(x)[1:]
     
     def get_shape_before_bottleneck(self):
         return self._shape_before_bottleneck
     
+    def build_graph(self, input_shape):
+        x = Input(shape=input_shape[1:])
+        return Model(inputs=x, outputs=self.call(x))
+    
+    # def get_mean_vector_tensor(self):
+    #     return self.mu_tensor
+    
+    # def get_log_variance_vector_tensor(self):
+    #     return self.log_variance_tensor
+    
+class Sampling(Layer):
+    @tf.function
+    def call(self, inputs):
+        mu, log_variance = inputs
+        epsilon = tf.random.normal(shape=tf.shape(mu), mean=0., stddev=1.) # Explicitly sample from a standard normal distribution.
+        sampled_point =  mu + tf.exp(log_variance / 2) * epsilon  # Reparameterization trick: mu + sigma * epsilon, where sigma = exp(log_variance / 2).
+        # This allows gradients to flow through the sampling process. 
+        return sampled_point
+    
 if __name__ == "__main__":
-    encoder = EncoderBuilder(conv_config=[
+    latent_space_dim = 2  # or whatever you use
+    encoder = EncoderBuilder(latent_space_dim, conv_config=[
         {'filters': 32, 'kernel_size': (3, 3), 'strides': (1, 1)},
         {'filters': 64, 'kernel_size': (3, 3), 'strides': (2, 2)},
         {'filters': 64, 'kernel_size': (3, 3), 'strides': (2, 2)},
@@ -71,4 +108,6 @@ if __name__ == "__main__":
     encoder(dummy_input)
     print("Shape before bottleneck:", encoder.get_shape_before_bottleneck())
     encoder.compile(optimizer=Adam(learning_rate=0.0001), loss=MeanSquaredError())
-    encoder.summary()
+    
+    encoder_model = encoder.build_graph(input_shape=dummy_input.shape)
+    encoder_model.summary()

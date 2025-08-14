@@ -97,6 +97,10 @@ class DecoderBuilder(Model):
 
         self.decorder_output_layers.append((convT, act))
         
+    def build_graph(self, input_shape):
+        x = Input(shape=input_shape[1:])
+        return Model(inputs=x, outputs=self.call(x))
+    
 if __name__ == "__main__":
     shape_before_bottleneck = (65, 18, 64)
     decoder_out_filter = 1
@@ -107,8 +111,9 @@ if __name__ == "__main__":
         {'filters': 64, 'kernel_size': (3, 3), 'strides': (1, 1)}
     ]
     decoder = DecoderBuilder(shape_before_bottleneck, decoder_out_filter, conv_config)
-    latent_dim = 3
+    latent_dim = 2
     dummy_input = tf.random.normal((1, latent_dim))
     decoder(dummy_input)
     decoder.compile(optimizer=Adam(learning_rate=0.0001), loss=MeanSquaredError())
-    decoder.summary()
+    decoder_model = decoder.build_graph(input_shape=dummy_input.shape)
+    decoder_model.summary()
