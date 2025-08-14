@@ -21,6 +21,15 @@ class DecoderBuilder(Model):
     def call(self, inputs):
         return self._build_decoder(inputs)
     
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "shape_before_bottleneck": self.shape_before_bottleneck,
+            "decoder_out_filter": self.decoder_out_filter,
+            "conv_config": self.conv_config
+        }
+        return {**base_config, **config}
+    
     def _build_decoder(self, x):
         x = self.dense_layer(x)
         tf.print("1st x's Shape: ", x.shape)

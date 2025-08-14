@@ -177,8 +177,8 @@ class PreprocessingPipeline:
             # print("Log Shape ", log_spectrogram.max())
             # print("Log Mel Shape ", log_mel_spectrogram.max())
             
-            # log_spectrogram = self.padder.pad_to_even_dims(log_spectrogram)
-            # log_mel_spectrogram = self.padder.pad_to_even_dims(log_mel_spectrogram)
+            log_spectrogram = self.padder.pad_to_even_dims(log_spectrogram)
+            log_mel_spectrogram = self.padder.pad_to_even_dims(log_mel_spectrogram)
             
             normalized_log_spectrogram = self.min_max_normalizer.normalize(log_spectrogram)
             normalized_log_mel_spectrogram = self.min_max_normalizer.normalize(log_mel_spectrogram)
@@ -231,7 +231,10 @@ if __name__ == "__main__":
     
     log_spec_data, log_mel_spec_data = preprocessing_pipeline.return_dataset()
     
-    saver.save(log_spec_data, 'log_spec_data')
+    # print(np.array(log_spec_data['train']).shape)
+    print(np.array(log_mel_spec_data['train']).shape)
+    
+    # saver.save(log_spec_data, 'log_spec_data')
     saver.save(log_mel_spec_data, 'log_mel_spec_data')
     
     # # Determining the "best" duration

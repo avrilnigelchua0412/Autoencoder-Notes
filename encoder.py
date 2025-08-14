@@ -28,6 +28,14 @@ class EncoderBuilder(Model):
     def call(self, inputs):
         return self._build_model(inputs)
 
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "latent_space_dim": self.latent_space_dim,
+            "conv_config": self.conv_config
+        }
+        return {**base_config, **config}
+    
     def _build_model(self, x):
         for conv, bn, act in self.conv_layers:
             x = conv(x)

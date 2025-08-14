@@ -10,9 +10,8 @@ from decoder import DecoderBuilder
 want to avoid Keras Backend dependency"""
 
 class VariationalAutoencoder(Model):
-    def __init__(self, latent_space_dim, recon_weight, beta, encoder, decoder, **kwargs):
+    def __init__(self, recon_weight, beta, encoder, decoder, **kwargs):
         super().__init__(**kwargs)
-        self.latent_space_dim = latent_space_dim
         self.recon_weight = recon_weight
         self.beta = beta
         
@@ -23,7 +22,23 @@ class VariationalAutoencoder(Model):
         
     def call(self, inputs):
         return self._build(inputs)
-        
+    
+    def get_config(self):
+        base_config = super().get_config()
+        config = {
+            "recon_weight": self.recon_weight,
+            "beta": self.beta,
+            "encoder": tf.keras.saving.serialize_keras_object(self._encoder),
+            "decoder": tf.keras.saving.serialize_keras_object(self._decoder)
+        }
+        return {**base_config, **config}
+    
+    @classmethod
+    def from_config(cls, config):
+        encoder = tf.keras.saving.deserialize_keras_object(config.pop("encoder"))
+        decoder = tf.keras.saving.deserialize_keras_object(config.pop("decoder"))
+        return cls(encoder=encoder, decoder=decoder, **config)
+    
     def __set_default(self):
         self.reconstruction_tracker = tf.keras.metrics.Mean(name="reconstruction_loss")
         self.kl_tracker = tf.keras.metrics.Mean(name="kl_loss")
@@ -136,7 +151,6 @@ if __name__ == "__main__":
     
     # Now instantiate the VAE
     vae = VariationalAutoencoder(
-        latent_space_dim,
         recon_weight=1.0,
         beta=1.0,
         encoder=encoder_model,
