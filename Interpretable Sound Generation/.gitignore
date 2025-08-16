@@ -2,4 +2,5 @@ Audio MNIST/data/*
 *.npy
 *.wav
 *.zip
+*.keras
 __pycache__

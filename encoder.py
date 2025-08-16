@@ -5,6 +5,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras import backend as K
 
+@tf.keras.utils.register_keras_serializable()
 class EncoderBuilder(Model):
     def __init__(self, latent_space_dim, conv_config=None, **kwargs):
         super().__init__(**kwargs)
@@ -94,7 +95,7 @@ class EncoderBuilder(Model):
     
     # def get_log_variance_vector_tensor(self):
     #     return self.log_variance_tensor
-    
+@tf.keras.utils.register_keras_serializable()
 class Sampling(Layer):
     @tf.function
     def call(self, inputs):

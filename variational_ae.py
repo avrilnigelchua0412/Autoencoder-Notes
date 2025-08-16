@@ -9,6 +9,7 @@ from decoder import DecoderBuilder
 """Use tf if you're subclassing tf.keras.Model and
 want to avoid Keras Backend dependency"""
 
+@tf.keras.utils.register_keras_serializable()
 class VariationalAutoencoder(Model):
     def __init__(self, recon_weight, beta, encoder, decoder, **kwargs):
         super().__init__(**kwargs)
@@ -28,15 +29,15 @@ class VariationalAutoencoder(Model):
         config = {
             "recon_weight": self.recon_weight,
             "beta": self.beta,
-            "encoder": tf.keras.saving.serialize_keras_object(self._encoder),
-            "decoder": tf.keras.saving.serialize_keras_object(self._decoder)
+            "encoder": tf.keras.utils.serialize_keras_object(self._encoder),
+            "decoder": tf.keras.utils.serialize_keras_object(self._decoder)
         }
         return {**base_config, **config}
     
     @classmethod
     def from_config(cls, config):
-        encoder = tf.keras.saving.deserialize_keras_object(config.pop("encoder"))
-        decoder = tf.keras.saving.deserialize_keras_object(config.pop("decoder"))
+        encoder = tf.keras.utils.deserialize_keras_object(config.pop("encoder"))
+        decoder = tf.keras.utils.deserialize_keras_object(config.pop("decoder"))
         return cls(encoder=encoder, decoder=decoder, **config)
     
     def __set_default(self):
@@ -122,6 +123,9 @@ class VariationalAutoencoder(Model):
     def summary(self):
         self._encoder.summary()
         self._decoder.summary()
+        
+    def get_models(self):
+        return self._encoder, self._decoder
         
 if __name__ == "__main__":
     conv_config=[

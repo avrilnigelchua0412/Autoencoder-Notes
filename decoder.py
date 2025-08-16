@@ -5,6 +5,7 @@ import numpy as np
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import MeanSquaredError
 
+@tf.keras.utils.register_keras_serializable()
 class DecoderBuilder(Model):
     def __init__(self, shape_before_bottleneck, decoder_out_filter, conv_config=None, **kwargs):
         super().__init__(**kwargs)
